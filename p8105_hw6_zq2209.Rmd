@@ -1,0 +1,123 @@
+---
+title: "p8105_hw6_zq2209"
+author: "Zining Qi"
+date: "2022-11-30"
+output: github_document
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+# Problem 2
+```{r}
+url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+homicide = read_csv(url) %>% 
+  janitor::clean_names()
+```
+
+```{r}
+homicide$city_state = paste(homicide$city, homicide$state, sep = ', ')
+homicide %>%
+  head() %>% 
+  knitr::kable()
+```
+
+```{r}
+homicide_df = homicide %>% 
+  filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL" ))) %>% 
+  filter(victim_race %in% c("White", "Black"))
+```
+
+```{r}
+homicide_df = homicide_df %>% 
+  mutate(victim_age = ifelse(victim_age == "Unknown", NA, victim_age))
+```
+
+```{r}
+homicide_df = homicide_df %>% 
+  mutate(victim_age = strtoi(victim_age))
+```
+
+
+```{r}
+homicide_data = homicide_df %>% 
+  mutate(solved_or_not = ifelse(disposition == "Closed by arrest", 1, 0))
+```
+
+```{r}
+glm_baltimore = homicide_data %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  glm(solved_or_not ~ victim_sex + victim_race + victim_age, family = binomial, data = .)
+```
+
+```{r}
+glm_baltimore_table = broom::tidy(glm_baltimore) %>% 
+  mutate(or = exp(estimate), 
+         or_lower = exp(estimate - 1.96*std.error), 
+         or_upper = exp(estimate + 1.96*std.error)) %>% 
+  filter(term == "victim_sexMale") %>% 
+  select(or, or_lower, or_upper) %>% 
+  rename("Odds ratio" = or, 
+         "Lower bound" = or_lower, 
+         "Upper bound" = or_upper) %>% 
+  knitr::kable(digits = 3)
+
+glm_baltimore_table
+```
+
+```{r}
+glm_all = function(citystate){
+  city_glm = homicide_data %>% 
+    filter(city_state == citystate) %>% 
+    glm(solved_or_not ~ victim_sex + victim_race + victim_age, family = binomial, data = .) %>% 
+    broom::tidy() %>% 
+    mutate(or = exp(estimate), 
+         or_lower = exp(estimate - 1.96*std.error), 
+         or_upper = exp(estimate + 1.96*std.error)) %>% 
+    filter(term == "victim_sexMale") %>% 
+    select(or, or_lower, or_upper)
+    
+    city_glm
+}
+```
+
+```{r}
+city_state_list = homicide_data %>% 
+  select(city_state) %>% 
+  unique()
+```
+
+```{r}
+glm_all_result = city_state_list %>% 
+  mutate(glm_result = map(city_state, glm_all)) %>% 
+  unnest(glm_result) %>% 
+  arrange(desc(or))
+```
+
+```{r}
+glm_all_table = glm_all_result %>% 
+  rename("Odds ratio" = or, 
+         "Lower bound" = or_lower, 
+         "Upper bound" = or_upper) %>% 
+  knitr::kable(digits = 3)
+
+glm_all_table
+```
+
+```{r}
+glm_all_result %>% 
+  mutate(city_state = fct_reorder(city_state, or)) %>% 
+  ggplot(aes(x = city_state, y = or)) + 
+  geom_point(color = "red") + 
+  geom_errorbar(aes(ymin = or_lower, ymax = or_upper)) + 
+  coord_flip() + 
+  labs(title = "Odds Ratio of solving cases comparing male victims to female victims", 
+       y = "Odds ratio of solving cases", 
+       x = "City, State", 
+       caption = "Bars represent 95% confidence interval") + 
+  theme_classic() 
+```
+
+
+
