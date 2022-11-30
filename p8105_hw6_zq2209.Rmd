@@ -7,6 +7,8 @@ output: github_document
 
 ```{r, include=FALSE}
 library(tidyverse)
+library(modelr)
+library(mgcv)
 ```
 
 # Problem 2
@@ -118,6 +120,111 @@ glm_all_result %>%
        caption = "Bars represent 95% confidence interval") + 
   theme_classic() 
 ```
+
+## Problem 3
+
+```{r}
+birthweight = read_csv("./data/birthweight.csv") %>% 
+  janitor::clean_names()
+
+birthweight = birthweight %>% 
+  mutate(babysex = as.factor(babysex), 
+         frace = as.factor(frace), 
+         malform = as.factor(malform), 
+         mrace = as.factor(mrace))
+```
+
+
+```{r}
+birthweight_hist = birthweight %>% 
+  ggplot(aes(x = bwt)) + 
+  geom_histogram() + 
+  labs(x = "Birthweight")
+```
+
+Length of Pregnancy
+Mother's birth weight
+Age of the parent
+race
+SES (income used as proxy here)
+
+gaweeks
+mrace
+ppbmi
+momage
+fincome
+
+
+```{r}
+lm_bwt = lm(bwt ~ gaweeks+mrace+ppbmi+fincome+momage, data = birthweight)
+```
+
+```{r}
+lm_bwt %>% broom::tidy()
+```
+
+```{r}
+birthweight %>% 
+  modelr::add_predictions(lm_bwt) %>% 
+  modelr::add_residuals(lm_bwt) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm", color = "red") +
+  labs(
+    x = "Predicted Values",
+    y = "Residuals",
+    title = "Residuals vs. predicted values"
+  )
+```
+
+
+```{r}
+lm_main = lm(bwt ~ gaweeks+blength, data = birthweight)
+lm_inter = lm(bwt ~ bhead*blength*babysex, data = birthweight)
+```
+
+```{r}
+lm_main %>% broom::tidy()
+lm_inter %>% broom::tidy()
+```
+
+```{r}
+cv_df = 
+  crossv_mc(birthweight, 100)
+```
+
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(
+    lm_bwt  = map(train, ~lm(bwt ~ gaweeks+mrace+ppbmi+fincome+momage, data = .x)),
+    lm_main  = map(train, ~lm(bwt ~ gaweeks+blength, data = .x)),
+    lm_inter  = map(train, ~lm(bwt ~ bhead*blength*babysex, data = .x))) %>% 
+  mutate(
+    rmse_bwt = map2_dbl(lm_bwt, test, ~rmse(model = .x, data = .y)),
+    rmse_main = map2_dbl(lm_main, test, ~rmse(model = .x, data = .y)),
+    rmse_inter = map2_dbl(lm_inter, test, ~rmse(model = .x, data = .y)))
+```
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin() +
+  labs(
+    x = "Model",
+    y = "RMSE",
+    title = "RMSE distribution across 3 models"
+  )
+```
+
+The three-interaction model seems the best among three models.
 
 
 
