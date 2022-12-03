@@ -141,7 +141,7 @@ From the plot of odds ratio and confidence interval, Albuquerque has the largest
 
 
 # Problem 3
-## LOading and cleaning data
+## Loading and cleaning data
 ```{r}
 birthweight = read_csv("./data/birthweight.csv") %>% 
   janitor::clean_names()
