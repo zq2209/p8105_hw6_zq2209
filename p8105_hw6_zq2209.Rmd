@@ -12,6 +12,8 @@ library(mgcv)
 ```
 
 # Problem 2
+
+## Loading and cleaning data
 ```{r}
 url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
 homicide = read_csv(url) %>% 
@@ -25,6 +27,7 @@ homicide %>%
   knitr::kable()
 ```
 
+## Filtering data
 ```{r}
 homicide_df = homicide %>% 
   filter(!(city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL" ))) %>% 
@@ -41,7 +44,7 @@ homicide_df = homicide_df %>%
   mutate(victim_age = strtoi(victim_age))
 ```
 
-
+## Logistics regression for Baltimore, MD
 ```{r}
 homicide_data = homicide_df %>% 
   mutate(solved_or_not = ifelse(disposition == "Closed by arrest", 1, 0))
@@ -51,8 +54,15 @@ homicide_data = homicide_df %>%
 glm_baltimore = homicide_data %>% 
   filter(city_state == "Baltimore, MD") %>% 
   glm(solved_or_not ~ victim_sex + victim_race + victim_age, family = binomial, data = .)
+
+summary(glm_baltimore)
 ```
 
+```{r}
+save(glm_baltimore, file = "result/glm_baltimore_result.RData")
+```
+
+### Odds ratio and confidence interval of odds ratio
 ```{r}
 glm_baltimore_table = broom::tidy(glm_baltimore) %>% 
   mutate(or = exp(estimate), 
@@ -68,6 +78,10 @@ glm_baltimore_table = broom::tidy(glm_baltimore) %>%
 glm_baltimore_table
 ```
 
+The odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed in Baltimore is 0.426, and 95% confidence interval is (0.325, 0.558).
+
+
+## Odds ratio and confidence interval for all cities
 ```{r}
 glm_all = function(citystate){
   city_glm = homicide_data %>% 
@@ -97,6 +111,7 @@ glm_all_result = city_state_list %>%
   arrange(desc(or))
 ```
 
+### Table of odds ratio for all cities
 ```{r}
 glm_all_table = glm_all_result %>% 
   rename("Odds ratio" = or, 
@@ -107,6 +122,7 @@ glm_all_table = glm_all_result %>%
 glm_all_table
 ```
 
+### Graph that show the odds ratio and confidence interval for all cities
 ```{r}
 glm_all_result %>% 
   mutate(city_state = fct_reorder(city_state, or)) %>% 
@@ -121,8 +137,11 @@ glm_all_result %>%
   theme_classic() 
 ```
 
-## Problem 3
+From the plot of odds ratio and confidence interval, Albuquerque has the largest odds ratio(larger than 1) and confidence interval, while New York has the smallest(smaller than 1). Confidence interval that doesn't include 1 implies 95% confidence that there is a difference for solving homicides comparing male victims to female victims. The smaller the odds ratio, the largest differences in solving homicides comparing male victims to female victims.
 
+
+# Problem 3
+## LOading and cleaning data
 ```{r}
 birthweight = read_csv("./data/birthweight.csv") %>% 
   janitor::clean_names()
@@ -134,35 +153,30 @@ birthweight = birthweight %>%
          mrace = as.factor(mrace))
 ```
 
-
+### Histogram of birth weight
 ```{r}
 birthweight_hist = birthweight %>% 
   ggplot(aes(x = bwt)) + 
   geom_histogram() + 
   labs(x = "Birthweight")
+
+birthweight_hist
 ```
 
-Length of Pregnancy
-Mother's birth weight
-Age of the parent
-race
-SES (income used as proxy here)
 
-gaweeks
-mrace
-ppbmi
-momage
-fincome
-
+## Propose a model
+From the course, Introduction to Public Health, I have learned some factors that influence birth weight of new born, and read some articles about the issue. From these information, there are some factors that affect birth weight a lot. These are biology factor: mothers' race, mothers' health condition, mothers' age. And there are social and financial factors, such as income of the family. Basrs on these information, the predictors that I choose are `Length of Pregnancy, Mother's birth weight, Age of the parent, race, SES (income)`. The model would be `bwt ~ gaweeks + mrace + ppbmi + fincome + momage`.
 
 ```{r}
 lm_bwt = lm(bwt ~ gaweeks+mrace+ppbmi+fincome+momage, data = birthweight)
 ```
 
+### Summary of the model
 ```{r}
 lm_bwt %>% broom::tidy()
 ```
 
+### Residual plot of the model
 ```{r}
 birthweight %>% 
   modelr::add_predictions(lm_bwt) %>% 
@@ -177,7 +191,9 @@ birthweight %>%
   )
 ```
 
+The plot seems okay because the red line is horizontal, and the plot seems random with predicted values.
 
+## Two other models
 ```{r}
 lm_main = lm(bwt ~ gaweeks+blength, data = birthweight)
 lm_inter = lm(bwt ~ bhead*blength*babysex, data = birthweight)
@@ -188,6 +204,7 @@ lm_main %>% broom::tidy()
 lm_inter %>% broom::tidy()
 ```
 
+## Comparing three models using cross validation
 ```{r}
 cv_df = 
   crossv_mc(birthweight, 100)
@@ -216,7 +233,8 @@ cv_df %>%
     names_prefix = "rmse_") %>% 
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + 
-  geom_violin() +
+  geom_violin(aes(fill = model)) +
+  theme_bw() +
   labs(
     x = "Model",
     y = "RMSE",
@@ -224,7 +242,7 @@ cv_df %>%
   )
 ```
 
-The three-interaction model seems the best among three models.
+The three-interaction model seems the best among three models according to the RMSE distribution for each model. The model with all interaction term has the smallest prediction error compared to others. So, the model with interactions are better.
 
 
 
